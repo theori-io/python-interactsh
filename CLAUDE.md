@@ -1,0 +1,1 @@
+- You are required to use uv to run any Python related commands.
