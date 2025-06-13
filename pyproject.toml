@@ -1,7 +1,7 @@
 [project]
 name = "python-interactsh"
 version = "0.1.0"
-gescription = "Python client library for interacting with Interactsh servers for out-of-band interaction testing"
+description = "Python client library for interacting with Interactsh servers for out-of-band interaction testing"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
