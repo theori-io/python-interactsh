@@ -24,53 +24,88 @@ pip install python-interactsh
 ### Basic Usage
 
 ```python
+import asyncio
 from interactsh import InteractshClient
 
-# Create a client
-client = InteractshClient()
+async def main():
+    # Create a client
+    client = InteractshClient()
+    
+    try:
+        # Generate a unique URL for testing
+        url = await client.url()
+        print(f"Test this URL: http://{url}")
+        
+        # Poll for interactions using async context manager
+        async with client.interact(poll_interval=1.0) as session:
+            async for interaction in session:
+                print(f"Received {interaction.protocol} interaction from {interaction.remote_address}")
+                if interaction.raw_request:
+                    print(f"Request preview: {interaction.raw_request[:200]}...")
+    finally:
+        await client.close()
 
-# Generate a unique URL for testing
-url = client.url()
-print(f"Test this URL: http://{url}")
-
-# Define callback to handle interactions
-def on_interaction(interaction):
-    print(f"Received {interaction.protocol} interaction from {interaction.remote_address}")
-    print(f"Full request: {interaction.raw_request}")
-
-# Start polling for interactions
-client.start_polling(interval=5.0, callback=on_interaction)
-
-# Your application testing code here...
-# The callback will be triggered when interactions are received
-
-# Stop polling and close the client
-client.stop_polling()
-client.close()
+# Run the async main function
+asyncio.run(main())
 ```
 
 ### Using Custom Server and Token
 
 ```python
+import asyncio
 from interactsh import InteractshClient, Options
 
-# Configure client options
-options = Options(
-    server_url="https://your-interactsh-server.com",
-    token="your-auth-token"
-)
+async def main():
+    # Configure client options
+    options = Options(
+        server_url="https://your-interactsh-server.com",
+        token="your-auth-token"
+    )
+    
+    client = InteractshClient(options)
+    
+    try:
+        url = await client.url()
+        print(f"Test URL: http://{url}")
+        
+        # Use the client...
+    finally:
+        await client.close()
 
-client = InteractshClient(options)
+asyncio.run(main())
 ```
 
 ### Session Management
 
 ```python
-# Save session for later use
-client.save_session("my_session.yaml")
+import asyncio
+from interactsh import InteractshClient
 
-# Restore session
-client = InteractshClient.from_session_file("my_session.yaml")
+async def save_session():
+    client = InteractshClient()
+    try:
+        # Initialize client
+        await client.initialize()
+        
+        # Save session for later use
+        session_string = client.serialize_session()
+        with open("my_session.yaml", "w") as f:
+            f.write(session_string)
+    finally:
+        await client.close()
+
+async def restore_session():
+    # Restore session
+    with open("my_session.yaml", "r") as f:
+        session_string = f.read()
+    
+    client = await InteractshClient.from_session_string(session_string)
+    try:
+        # Use restored client...
+        url = await client.url()
+        print(f"Restored session URL: http://{url}")
+    finally:
+        await client.close()
 ```
 
 ## API Reference
@@ -87,26 +122,25 @@ InteractshClient(options: Optional[Options] = None)
 
 #### Methods
 
-- `url() -> str`: Generate a new interaction URL
-- `start_polling(interval: float, callback: Callable[[Interaction], None])`: Start polling for interactions
-- `stop_polling()`: Stop polling
-- `close()`: Close client and deregister from server
-- `save_session(filename: str)`: Save session to file
-- `from_session_file(filename: str) -> InteractshClient`: Create client from saved session
+- `async url() -> str`: Generate a new interaction URL
+- `interact(poll_interval: float = 1.0) -> InteractionSession`: Create an interaction session for polling
+- `async poll_once() -> list[Interaction]`: Poll server once and return interactions
+- `async close()`: Close client and deregister from server
+- `serialize_session() -> str`: Serialize session to YAML string
+- `async from_session_string(session_string: str) -> InteractshClient`: Create client from session string
 
 ### Options
 
 Configuration options for the client.
 
 ```python
-@dataclass
-class Options:
+class Options(BaseModel):
     server_url: str = "oast.pro,oast.live,oast.site,oast.online,oast.fun,oast.me"
     token: str = ""
     disable_http_fallback: bool = False
     correlation_id_length: int = 20
     correlation_id_nonce_length: int = 13
-    http_client: Optional[requests.Session] = None
+    http_client: Optional[aiohttp.ClientSession] = None
     session_info: Optional[SessionInfo] = None
     keep_alive_interval: float = 0
 ```
@@ -116,18 +150,16 @@ class Options:
 Data structure representing a received interaction.
 
 ```python
-@dataclass
-class Interaction:
-    protocol: str
-    unique_id: str
-    full_id: str
-    q_type: Optional[str] = None
-    raw_request: Optional[str] = None
-    raw_response: Optional[str] = None
-    smtp_from: Optional[str] = None
-    remote_address: str = ""
-    timestamp: datetime = field(default_factory=datetime.now)
-    asn_info: List[Dict[str, str]] = field(default_factory=list)
+class Interaction(BaseModel):
+    protocol: str = Field(default="")
+    unique_id: str = Field(alias="unique-id", default="")
+    full_id: str = Field(alias="full-id", default="")
+    q_type: Optional[str] = Field(alias="q-type", default=None)
+    raw_request: Optional[str] = Field(alias="raw-request", default=None)
+    raw_response: Optional[str] = Field(alias="raw-response", default=None)
+    smtp_from: Optional[str] = Field(alias="smtp-from", default=None)
+    remote_address: str = Field(alias="remote-address", default="")
+    timestamp: datetime = Field(default_factory=datetime.now)
 ```
 
 ## Examples
@@ -135,54 +167,66 @@ class Interaction:
 ### Web Application Testing
 
 ```python
-import requests
-from interactsh_client import InteractshClient
+import asyncio
+import aiohttp
+from interactsh import InteractshClient
 
-client = InteractshClient()
+async def test_ssrf():
+    client = InteractshClient()
+    
+    try:
+        # Test for SSRF vulnerability
+        payload_url = await client.url()
+        test_payload = f"http://{payload_url}/ssrf-test"
+        
+        print(f"Testing with payload: {test_payload}")
+        
+        # Send payload to target application
+        async with aiohttp.ClientSession() as session:
+            await session.post("https://target-app.com/api/fetch", 
+                             json={"url": test_payload})
+        
+        # Poll for interactions
+        async with client.interact(poll_interval=2.0) as interaction_session:
+            async for interaction in interaction_session:
+                if interaction.protocol == "http":
+                    print(f"SSRF detected! Request from {interaction.remote_address}")
+                    if interaction.raw_request:
+                        print(f"Request: {interaction.raw_request[:500]}...")
+                    break  # Stop after first interaction
+    finally:
+        await client.close()
 
-# Test for SSRF vulnerability
-payload_url = client.url()
-test_payload = f"http://{payload_url}/ssrf-test"
-
-def check_interaction(interaction):
-    if interaction.protocol == "http":
-        print(f"SSRF detected! Request from {interaction.remote_address}")
-        print(f"Request: {interaction.raw_request}")
-
-client.start_polling(5.0, check_interaction)
-
-# Send payload to target application
-requests.post("https://target-app.com/api/fetch", 
-              json={"url": test_payload})
-
-# Wait for interaction...
+asyncio.run(test_ssrf())
 ```
 
 ### DNS Exfiltration Detection
 
 ```python
-from interactsh_client import InteractshClient
+import asyncio
+from interactsh import InteractshClient
 
-client = InteractshClient()
-domain = client.url()
+async def monitor_dns():
+    client = InteractshClient()
+    
+    try:
+        domain = await client.url()
+        print(f"Monitor DNS queries to: {domain}")
+        
+        # Poll for DNS interactions
+        async with client.interact(poll_interval=1.0) as session:
+            async for interaction in session:
+                if interaction.protocol == "dns":
+                    print(f"DNS query detected: {interaction.full_id}")
+                    print(f"Query type: {interaction.q_type}")
+                    print(f"Remote address: {interaction.remote_address}")
+    except KeyboardInterrupt:
+        print("\nStopping DNS monitoring...")
+    finally:
+        await client.close()
 
-def dns_callback(interaction):
-    if interaction.protocol == "dns":
-        print(f"DNS query detected: {interaction.full_id}")
-        print(f"Query type: {interaction.q_type}")
-
-client.start_polling(2.0, dns_callback)
-
-# Your DNS exfiltration test code here
-print(f"Monitor DNS queries to: {domain}")
+asyncio.run(monitor_dns())
 ```
-
-## Requirements
-
-- Python 3.12+
-- requests >= 2.31.0
-- cryptography >= 41.0.0
-- pyyaml >= 6.0
 
 ## License
 
