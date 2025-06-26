@@ -525,7 +525,7 @@ class InteractshClient:
             except asyncio.TimeoutError:
                 pass  # Timeout reached, continue loop
 
-    async def url(self) -> str:
+    async def domain(self) -> str:
         """Generate a new URL for interaction"""
         await self.initialize()
 
@@ -542,6 +542,13 @@ class InteractshClient:
         # Build URL
         assert self.server_url is not None
         return f"{self.correlation_id}{random_data}.{self.server_url.netloc}"
+
+    async def url(self, secure=True) -> str:
+        domain = await self.domain()
+        if not domain:
+            return domain
+        scheme = "https" if secure else "http"
+        return f"{scheme}://{domain}"
 
     def interact(self, poll_interval: float = 1.0) -> InteractionSession:
         """Create an interaction session for receiving interactions

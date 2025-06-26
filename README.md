@@ -34,7 +34,7 @@ async def main():
     try:
         # Generate a unique URL for testing
         url = await client.url()
-        print(f"Test this URL: http://{url}")
+        print(f"Test this URL: {url}")
         
         # Poll for interactions using async context manager
         async with client.interact(poll_interval=1.0) as session:
@@ -66,7 +66,7 @@ async def main():
     
     try:
         url = await client.url()
-        print(f"Test URL: http://{url}")
+        print(f"Test URL: {url}")
         
         # Use the client...
     finally:
@@ -103,7 +103,7 @@ async def restore_session():
     try:
         # Use restored client...
         url = await client.url()
-        print(f"Restored session URL: http://{url}")
+        print(f"Restored session URL: {url}")
     finally:
         await client.close()
 ```
@@ -177,7 +177,7 @@ async def test_ssrf():
     try:
         # Test for SSRF vulnerability
         payload_url = await client.url()
-        test_payload = f"http://{payload_url}/ssrf-test"
+        test_payload = f"{payload_url}/ssrf-test"
         
         print(f"Testing with payload: {test_payload}")
         
@@ -210,7 +210,7 @@ async def monitor_dns():
     client = InteractshClient()
     
     try:
-        domain = await client.url()
+        domain = await client.domain()
         print(f"Monitor DNS queries to: {domain}")
         
         # Poll for DNS interactions

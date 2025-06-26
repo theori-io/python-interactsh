@@ -581,8 +581,7 @@ class TestIntegration:
         await client._initialize()
 
         # Generate test URL
-        test_url = await client.url()
-        http_url = f"http://{test_url}"
+        http_url = await client.url()
         print(f"Generated test URL: {http_url}")
 
         interactions_received = []
